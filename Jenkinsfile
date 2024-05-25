@@ -59,7 +59,7 @@ pipeline {
 
                         sh "git remote set-url origin https://${TOKEN}@github.com/tonyrud/java-maven-app.git"
                         sh 'git add .'
-                        sh 'git commit -m "ci: version bump - $version"'
+                        sh 'git commit -m "ci: version bump - ${IMAGE_NAME}"'
                         sh 'git push origin HEAD:jenkins-jobs'
                     }
                 }
