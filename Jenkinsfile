@@ -12,9 +12,6 @@ pipeline {
     tools {
        maven 'maven-3.9'
     }
-    environment {
-        IMAGE_NAME = 'tonyrudny/java-maven-app-private:1.0.3-6'
-    }
     stages {
         stage('increment version') {
             steps {
