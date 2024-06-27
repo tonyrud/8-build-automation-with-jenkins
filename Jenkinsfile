@@ -77,16 +77,28 @@ pipeline {
                         sh 'git config --global user.email "jenkins@example.com"'
                         sh 'git config --global user.name "jenkins"'
 
-                        sh 'git status'
-                        sh 'git branch'
-                        sh 'git config --list'
+        //                 sh 'git status'
+        //                 sh 'git branch'
+        //                 sh 'git config --list'
 
-                        sh "git remote set-url origin https://${TOKEN}@github.com/tonyrud/java-maven-app.git"
-                        sh 'git add .'
-                        sh 'git commit -m "ci: version bump - ${IMAGE_VERSION}"'
-                        sh "git push origin HEAD:${GIT_BRANCH}"
-                    }
-                }
+        //                 sh "git remote set-url origin https://${TOKEN}@github.com/tonyrud/java-maven-app.git"
+        //                 sh 'git add .'
+        //                 sh 'git commit -m "ci: version bump - ${IMAGE_VERSION}"'
+        //                 sh "git push origin HEAD:${GIT_BRANCH}"
+        //             }
+        //         }
+        //     }
+        // }
+
+        stage('k8s deploy') {
+            environment {
+                AWS_ACCESS_KEY_ID = credentials('aws_access_key_id')
+                AWS_SECRET_ACCESS_KEY = credentials('aws_secret_access_key')
+                KUBECONFIG = credentials('kubeconfig')
+            }
+            steps {
+                echo 'testing k8s deployment...'
+                sh 'kubectl create deployment nginx-deployment --image=nginx'
             }
         }
     }
