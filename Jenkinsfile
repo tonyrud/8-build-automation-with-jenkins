@@ -22,7 +22,7 @@ pipeline {
                         versions:commit'
                     def matcher = readFile('pom.xml') =~ '<version>(.+)</version>'
                     def version = matcher[0][1]
-                    env.IMAGE_VERSION = "$version-$BUILD_NUMBER"
+                    env.IMAGE_VERSION = "$version"
                     env.IMAGE_NAME = "tonyrudny/java-maven-app-private:${IMAGE_VERSION}"
                 }
             }
@@ -45,6 +45,16 @@ pipeline {
         } 
         stage("deploy") {
             steps {
+                // with plain Docker
+                // script {
+                //     echo 'deploying docker image to EC2...'
+                //     def dockerCmd = "docker run -p 8080:8080 -d ${IMAGE_NAME}"
+                //     sshagent(['ec2-server-key']) {
+                //         sh "ssh -o StrictHostKeyChecking=no ec2-user@3.145.156.253 ${dockerCmd}"
+                //     }
+                // }
+                
+                // with Docker Compose
                 script {
                     echo 'deploying docker image to EC2...'
 
