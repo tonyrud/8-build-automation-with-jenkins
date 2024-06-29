@@ -12,6 +12,11 @@ pipeline {
     tools {
        maven 'maven-3.9'
     }
+    environment {
+        DOCKER_REPO_SERVER = '326347646211.dkr.ecr.us-east-2.amazonaws.com'
+        DOCKER_REPO = "${DOCKER_REPO_SERVER}/java-maven-app"
+    }
+
     stages {
         stage('increment version') {
             steps {
@@ -23,8 +28,6 @@ pipeline {
                     def matcher = readFile('pom.xml') =~ '<version>(.+)</version>'
                     def version = matcher[0][1]
                     env.IMAGE_VERSION = "$version"
-                    env.DOCKER_REPO = "tonyrudny/java-maven-app-private"
-                    env.IMAGE_NAME = "${DOCKER_REPO}:${IMAGE_VERSION}"
                 }
             }
         }
@@ -37,18 +40,21 @@ pipeline {
         stage('build image') {
             steps {
                 script {
-                    echo 'building the docker image...'
-                    buildImage(env.IMAGE_NAME)
-                    dockerLogin()
-                    dockerPush(env.IMAGE_NAME)
+                    echo "building the docker image..."
+                    withCredentials([usernamePassword(credentialsId: 'aws-ecr-credentials', passwordVariable: 'PASS', usernameVariable: 'USER')]){
+                        sh "docker build -t ${DOCKER_REPO}:${IMAGE_VERSION} ."
+                        sh 'echo $PASS | docker login -u $USER --password-stdin ${DOCKER_REPO_SERVER}'
+                        sh "docker push ${DOCKER_REPO}:${IMAGE_VERSION}"
+                    }
                 }
             }
-        } 
+        }
+
         // stage("deploy with Docker on EC2") {
         //     steps {
         //         script {
         //             echo 'deploying docker image to EC2...'
-        //             def dockerCmd = "docker run -p 8080:8080 -d ${IMAGE_NAME}"
+        //             def dockerCmd = "docker run -p 8080:8080 -d ${IMAGE_VERSION}"
         //             sshagent(['ec2-server-key']) {
         //                 sh "ssh -o StrictHostKeyChecking=no ec2-user@3.145.156.253 ${dockerCmd}"
         //             }
@@ -61,7 +67,7 @@ pipeline {
         //         script {
         //             echo 'deploying docker image to EC2...'
 
-        //             def shellCmd = "bash ./server-cmds.sh ${IMAGE_NAME}"
+        //             def shellCmd = "bash ./server-cmds.sh ${IMAGE_VERSION}"
         //             def ec2Instance = "ec2-user@3.145.156.253"
 
         //             sshagent(['ec2-server-key']) {
