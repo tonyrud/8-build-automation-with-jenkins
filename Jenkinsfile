@@ -12,6 +12,11 @@ pipeline {
     tools {
        maven 'maven-3.9'
     }
+    environment {
+        DOCKER_REPO_SERVER = '326347646211.dkr.ecr.us-east-2.amazonaws.com'
+        DOCKER_REPO = "${DOCKER_REPO_SERVER}/java-maven-app"
+    }
+
     stages {
         stage('increment version') {
             steps {
@@ -23,7 +28,6 @@ pipeline {
                     def matcher = readFile('pom.xml') =~ '<version>(.+)</version>'
                     def version = matcher[0][1]
                     env.IMAGE_VERSION = "$version"
-                    env.IMAGE_NAME = "tonyrudny/java-maven-app-private:${IMAGE_VERSION}"
                 }
             }
         }
@@ -36,40 +40,63 @@ pipeline {
         stage('build image') {
             steps {
                 script {
-                    echo 'building the docker image...'
-                    buildImage(env.IMAGE_NAME)
-                    dockerLogin()
-                    dockerPush(env.IMAGE_NAME)
-                }
-            }
-        } 
-        stage("deploy") {
-            steps {
-                // with plain Docker
-                // script {
-                //     echo 'deploying docker image to EC2...'
-                //     def dockerCmd = "docker run -p 8080:8080 -d ${IMAGE_NAME}"
-                //     sshagent(['ec2-server-key']) {
-                //         sh "ssh -o StrictHostKeyChecking=no ec2-user@3.145.156.253 ${dockerCmd}"
-                //     }
-                // }
-                
-                // with Docker Compose
-                script {
-                    echo 'deploying docker image to EC2...'
-
-                    def shellCmd = "bash ./server-cmds.sh ${IMAGE_NAME}"
-                    def ec2Instance = "ec2-user@3.145.156.253"
-
-                    sshagent(['ec2-server-key']) {
-                        sh "scp server-cmds.sh ${ec2Instance}:/home/ec2-user"
-                        sh "scp docker_compose.yml ${ec2Instance}:/home/ec2-user"
-                        sh "ssh -o StrictHostKeyChecking=no ${ec2Instance} ${shellCmd}"
-
+                    echo "building the docker image..."
+                    withCredentials([usernamePassword(credentialsId: 'aws-ecr-credentials', passwordVariable: 'PASS', usernameVariable: 'USER')]){
+                        sh "docker build -t ${DOCKER_REPO}:${IMAGE_VERSION} ."
+                        sh 'echo $PASS | docker login -u $USER --password-stdin ${DOCKER_REPO_SERVER}'
+                        sh "docker push ${DOCKER_REPO}:${IMAGE_VERSION}"
                     }
                 }
-            }               
+            }
         }
+
+        // stage("deploy with Docker on EC2") {
+        //     steps {
+        //         script {
+        //             echo 'deploying docker image to EC2...'
+        //             def dockerCmd = "docker run -p 8080:8080 -d ${IMAGE_VERSION}"
+        //             sshagent(['ec2-server-key']) {
+        //                 sh "ssh -o StrictHostKeyChecking=no ec2-user@3.145.156.253 ${dockerCmd}"
+        //             }
+        //         }
+        //     }
+        // }
+
+        // stage("deploy with Docker Compose on EC2") {
+        //     steps {
+        //         script {
+        //             echo 'deploying docker image to EC2...'
+
+        //             def shellCmd = "bash ./server-cmds.sh ${IMAGE_VERSION}"
+        //             def ec2Instance = "ec2-user@3.145.156.253"
+
+        //             sshagent(['ec2-server-key']) {
+        //                 sh "scp server-cmds.sh ${ec2Instance}:/home/ec2-user"
+        //                 sh "scp docker_compose.yml ${ec2Instance}:/home/ec2-user"
+        //                 sh "ssh -o StrictHostKeyChecking=no ${ec2Instance} ${shellCmd}"
+
+        //             }
+        //         }
+        //     }
+        // }
+
+        // with Kubernetes
+
+        stage('k8s deploy') {
+            environment {
+                AWS_ACCESS_KEY_ID = credentials('aws_access_key_id')
+                AWS_SECRET_ACCESS_KEY = credentials('aws_secret_access_key')
+                APP_NAME = 'java-maven-app'
+                // KUBECONFIG = credentials('kubeconfig')
+            }
+            steps {
+                echo 'kubectl deployment...'
+                sh 'envsubst < kubernetes/deployment.yaml | kubectl apply -f -'
+                sh 'envsubst < kubernetes/service.yaml | kubectl apply -f -'
+
+            }
+        }
+
         stage('commit version update'){
             steps {
                 script {
