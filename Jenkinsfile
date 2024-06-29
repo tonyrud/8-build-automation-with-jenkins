@@ -23,7 +23,8 @@ pipeline {
                     def matcher = readFile('pom.xml') =~ '<version>(.+)</version>'
                     def version = matcher[0][1]
                     env.IMAGE_VERSION = "$version"
-                    env.IMAGE_NAME = "tonyrudny/java-maven-app-private:${IMAGE_VERSION}"
+                    env.DOCKER_REPO = "tonyrudny/java-maven-app-private"
+                    env.IMAGE_NAME = "${DOCKER_REPO}:${IMAGE_VERSION}"
                 }
             }
         }
@@ -79,11 +80,14 @@ pipeline {
             environment {
                 AWS_ACCESS_KEY_ID = credentials('aws_access_key_id')
                 AWS_SECRET_ACCESS_KEY = credentials('aws_secret_access_key')
+                APP_NAME = 'java-maven-app'
                 // KUBECONFIG = credentials('kubeconfig')
             }
             steps {
                 echo 'kubectl deployment...'
-                sh 'kubectl create deployment nginx-deployment --image=nginx'
+                sh 'envsubst < kubernetes/deployment.yaml | kubectl apply -f -'
+                sh 'envsubst < kubernetes/service.yaml | kubectl apply -f -'
+
             }
         }
 
