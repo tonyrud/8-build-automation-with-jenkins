@@ -42,11 +42,9 @@ pipeline {
             steps {
                 script {
                     echo "building the docker image..."
-                    withCredentials([usernamePassword(credentialsId: 'aws-ecr-credentials', passwordVariable: 'PASS', usernameVariable: 'USER')]){
-                        sh "docker build -t $IMAGE ."
-                        sh 'echo $PASS | docker login -u $USER --password-stdin ${DOCKER_REPO_SERVER}'
-                        sh "docker push $IMAGE"
-                    }
+                    buildImage(env.IMAGE)
+                    dockerLogin(env.DOCKER_REPO_SERVER)
+                    dockerPush(env.IMAGE)
                 }
             }
         }
@@ -92,9 +90,12 @@ pipeline {
             steps {
                 script {
                             echo "waiting for EC2 server to initialize"
-                            sleep(time: 90, unit: "SECONDS")
+
+                            // commented out for faster testing
+                            // sleep(time: 90, unit: "SECONDS")
 
                             echo 'deploying docker image to EC2...'
+
                             echo "${EC2_PUBLIC_IP}"
 
                             // pass the image version and creds to the server-cmds.sh script
@@ -144,7 +145,7 @@ pipeline {
                         sh "git remote set-url origin https://${TOKEN}@github.com/tonyrud/java-maven-app.git"
                         sh 'git add .'
                         sh 'git commit -m "ci: version bump - ${IMAGE_VERSION}"'
-                        sh "git push origin HEAD:${GIT_BRANCH}"
+                        sh "git push origin HEAD:${BRANCH_NAME}"
                     }
                 }
             }
