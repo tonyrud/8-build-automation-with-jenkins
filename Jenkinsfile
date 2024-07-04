@@ -97,12 +97,9 @@ pipeline {
                             echo 'deploying docker image to EC2...'
                             echo "${EC2_PUBLIC_IP}"
 
-
-                            sh 'echo $DOCKER_CREDS_PSW | docker login -u $DOCKER_CREDS_USR --password-stdin ${DOCKER_REPO_SERVER}'
-
-                            // pass the image version to the server-cmds.sh script
+                            // pass the image version and creds to the server-cmds.sh script
                             // after ssh the IMAGE var will not be available
-                            def shellCmd = "bash ./server-cmds.sh $IMAGE"
+                            def shellCmd = "bash ./server-cmds.sh $IMAGE $DOCKER_CREDS_USR $DOCKER_CREDS_PSW $DOCKER_REPO_SERVER"
                             def ec2Instance = "ec2-user@${EC2_PUBLIC_IP}"
 
                             sshagent(['jenkins-ssh']) {
