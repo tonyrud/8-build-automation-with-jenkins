@@ -99,7 +99,7 @@ pipeline {
                             echo "${EC2_PUBLIC_IP}"
 
                             // pass the image version and creds to the server-cmds.sh script
-                            // after ssh the IMAGE var will not be available
+                            // after ssh these wouldn't be available and must be passed into the script
                             def shellCmd = "bash ./server-cmds.sh $IMAGE $DOCKER_CREDS_USR $DOCKER_CREDS_PSW $DOCKER_REPO_SERVER"
                             def ec2Instance = "ec2-user@${EC2_PUBLIC_IP}"
 
@@ -137,10 +137,6 @@ pipeline {
                     withCredentials([string(credentialsId: 'github-access-token', variable: 'TOKEN')]){
                         sh 'git config --global user.email "jenkins@example.com"'
                         sh 'git config --global user.name "jenkins"'
-
-                        sh 'git status'
-                        sh 'git branch'
-                        sh 'git config --list'
 
                         sh "git remote set-url origin https://${TOKEN}@github.com/tonyrud/java-maven-app.git"
                         sh 'git add .'
