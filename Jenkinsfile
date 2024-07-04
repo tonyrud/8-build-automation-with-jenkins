@@ -28,6 +28,7 @@ pipeline {
                     def matcher = readFile('pom.xml') =~ '<version>(.+)</version>'
                     def version = matcher[0][1]
                     env.IMAGE_VERSION = "$version"
+                    env.IMAGE =  "${DOCKER_REPO}:${IMAGE_VERSION}"
                 }
             }
         }
@@ -42,9 +43,9 @@ pipeline {
                 script {
                     echo "building the docker image..."
                     withCredentials([usernamePassword(credentialsId: 'aws-ecr-credentials', passwordVariable: 'PASS', usernameVariable: 'USER')]){
-                        sh "docker build -t ${DOCKER_REPO}:${IMAGE_VERSION} ."
+                        sh "docker build -t $IMAGE ."
                         sh 'echo $PASS | docker login -u $USER --password-stdin ${DOCKER_REPO_SERVER}'
-                        sh "docker push ${DOCKER_REPO}:${IMAGE_VERSION}"
+                        sh "docker push $IMAGE"
                     }
                 }
             }
@@ -62,7 +63,7 @@ pipeline {
                         sh "terraform init -force-copy"
                         sh "terraform apply --auto-approve"
                         EC2_PUBLIC_IP = sh(
-                        script: "terraform output ec2-public_ip",
+                        script: "terraform output ec2_public_ip",
                         returnStdout: true
                         ).trim()
                     }
@@ -99,7 +100,9 @@ pipeline {
 
                             sh 'echo $DOCKER_CREDS_PSW | docker login -u $DOCKER_CREDS_USR --password-stdin ${DOCKER_REPO_SERVER}'
 
-                            def shellCmd = "bash ./server-cmds.sh ${DOCKER_REPO}:${IMAGE_VERSION}"
+                            // pass the image version to the server-cmds.sh script
+                            // after ssh the IMAGE var will not be available
+                            def shellCmd = "bash ./server-cmds.sh $IMAGE"
                             def ec2Instance = "ec2-user@${EC2_PUBLIC_IP}"
 
                             sshagent(['jenkins-ssh']) {
