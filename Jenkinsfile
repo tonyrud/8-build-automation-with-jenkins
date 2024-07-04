@@ -59,7 +59,7 @@ pipeline {
             steps {
                 script {
                     dir('terraform') {
-                        sh "terraform init"
+                        sh "terraform init -force-copy"
                         sh "terraform apply --auto-approve"
                         EC2_PUBLIC_IP = sh(
                         script: "terraform output ec2-public_ip",
@@ -85,7 +85,7 @@ pipeline {
 
         stage("deploy with Docker Compose on EC2") {
             environment {
-                DOCKER_CREDS = credentials('docker-hub-repo')
+                DOCKER_CREDS = credentials('aws-ecr-credentials')
             }
 
             steps {
@@ -97,7 +97,9 @@ pipeline {
                             echo "${EC2_PUBLIC_IP}"
 
 
-                            def shellCmd = "bash ./server-cmds.sh ${IMAGE_NAME} ${DOCKER_CREDS_USR} ${DOCKER_CREDS_PSW}"
+                            sh 'echo $DOCKER_CREDS_PSW | docker login -u $DOCKER_CREDS_USR --password-stdin ${DOCKER_REPO_SERVER}'
+
+                            def shellCmd = "bash ./server-cmds.sh ${DOCKER_REPO}:${IMAGE_VERSION}"
                             def ec2Instance = "ec2-user@${EC2_PUBLIC_IP}"
 
                             sshagent(['jenkins-ssh']) {
