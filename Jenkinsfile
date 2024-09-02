@@ -18,19 +18,131 @@ pipeline {
     }
 
     stages {
+        stage('increment version') {
+            steps {
+                script {
+                    echo 'incrementing app version...'
+                    sh 'mvn build-helper:parse-version versions:set \
+                        -DnewVersion=\\\${parsedVersion.majorVersion}.\\\${parsedVersion.minorVersion}.\\\${parsedVersion.nextIncrementalVersion} \
+                        versions:commit'
+                    def matcher = readFile('pom.xml') =~ '<version>(.+)</version>'
+                    def version = matcher[0][1]
+                    env.IMAGE_VERSION = "$version"
+                    env.IMAGE =  "${DOCKER_REPO}:${IMAGE_VERSION}"
+                }
+            }
+        }
+        stage('build app') {
+            steps {
+                echo 'building application jar...'
+                buildJar()
+            }
+        }
+        stage('build image') {
+            steps {
+                script {
+                    echo "building the docker image..."
+                    buildImage(env.IMAGE)
+                    dockerLogin(env.DOCKER_REPO_SERVER)
+                    dockerPush(env.IMAGE)
+                }
+            }
+        }
 
-        stage("copy files to ansible server") {
+        stage("provision server") {
+            environment {
+                AWS_ACCESS_KEY_ID = credentials('aws_access_key_id')
+                AWS_SECRET_ACCESS_KEY = credentials('aws_secret_access_key')
+                TF_VAR_env_prefix = 'test'
+            }
+            steps {
+                script {
+                    dir('terraform') {
+                        sh "terraform init -force-copy"
+                        sh "terraform apply --auto-approve"
+                        EC2_PUBLIC_IP = sh(
+                        script: "terraform output ec2_public_ip",
+                        returnStdout: true
+                        ).trim()
+                    }
+                }
+            }
+        }
+
+
+        // stage("deploy with Docker on EC2") {
+        //     steps {
+        //         script {
+        //             echo 'deploying docker image to EC2...'
+        //             def dockerCmd = "docker run -p 8080:8080 -d ${IMAGE_VERSION}"
+        //             sshagent(['ec2-server-key']) {
+        //                 sh "ssh -o StrictHostKeyChecking=no ec2-user@3.145.156.253 ${dockerCmd}"
+        //             }
+        //         }
+        //     }
+        // }
+
+        stage("deploy with Docker Compose on EC2") {
+            environment {
+                DOCKER_CREDS = credentials('aws-ecr-credentials')
+            }
 
             steps {
                 script {
-                            sshagent(['digital-ocean-ansible-server']) {
-                                // copy files from repo to ec2 instance
-                                sh "scp -o StrictHostKeyChecking=no ansible/* root@157.245.143.37:/root"
-                            }
+                            echo "waiting for EC2 server to initialize"
 
-                            withCredentials([string(credentialsId: 'ec2-server-key', keyFileVariable: 'keyfile', usernameVariable: 'username')]) {
-                                sh 'scp ${keyfile} root@157.245.143.37:/root/ssh-key.pem'
+                            // commented out for faster testing
+                            // sleep(time: 90, unit: "SECONDS")
+
+                            echo 'deploying docker image to EC2...'
+
+                            echo "${EC2_PUBLIC_IP}"
+
+                            // pass the image version and creds to the server-cmds.sh script
+                            // after ssh these wouldn't be available and must be passed into the script
+                            def shellCmd = "bash ./server-cmds.sh $IMAGE $DOCKER_CREDS_USR $DOCKER_CREDS_PSW $DOCKER_REPO_SERVER"
+                            def ec2Instance = "ec2-user@${EC2_PUBLIC_IP}"
+
+                            sshagent(['jenkins-ssh']) {
+                                // copy files from repo to ec2 instance
+                                sh "scp -o StrictHostKeyChecking=no server-cmds.sh ${ec2Instance}:/home/ec2-user"
+                                sh "scp -o StrictHostKeyChecking=no docker_compose.yml ${ec2Instance}:/home/ec2-user"
+                                // ssh into ec2 instance and run commands
+                                sh "ssh -o StrictHostKeyChecking=no ${ec2Instance} ${shellCmd}"
                             }
+                }
+            }
+        }
+
+        // with Kubernetes
+
+        // stage('k8s deploy') {
+        //     environment {
+        //         AWS_ACCESS_KEY_ID = credentials('aws_access_key_id')
+        //         AWS_SECRET_ACCESS_KEY = credentials('aws_secret_access_key')
+        //         APP_NAME = 'java-maven-app'
+        //         // KUBECONFIG = credentials('kubeconfig')
+        //     }
+        //     steps {
+        //         echo 'kubectl deployment...'
+        //         sh 'envsubst < kubernetes/deployment.yaml | kubectl apply -f -'
+        //         sh 'envsubst < kubernetes/service.yaml | kubectl apply -f -'
+
+        //     }
+        // }
+
+        stage('commit version update'){
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'github-access-token', variable: 'TOKEN')]){
+                        sh 'git config --global user.email "jenkins@example.com"'
+                        sh 'git config --global user.name "jenkins"'
+
+                        sh "git remote set-url origin https://${TOKEN}@github.com/tonyrud/java-maven-app.git"
+                        sh 'git add .'
+                        sh 'git commit -m "ci: version bump - ${IMAGE_VERSION}"'
+                        sh "git push origin HEAD:${BRANCH_NAME}"
+                    }
                 }
             }
         }
