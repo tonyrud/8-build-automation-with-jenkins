@@ -25,8 +25,13 @@ pipeline {
                                 // copy files from repo to ec2 instance
                                 sh 'scp -o StrictHostKeyChecking=no ansible/* root@157.245.143.37:/root'
 
-                                withCredentials([sshUserPrivateKey(credentialsId: 'ec2-server-key', keyFileVariable: 'keyfile', usernameVariable: 'username')]) {
-                                    sh 'scp ${keyfile} root@157.245.143.37:/root/ssh-key.pem'
+                                // withCredentials([sshUserPrivateKey(credentialsId: 'ec2-server-key', keyFileVariable: 'keyfile', usernameVariable: 'user')]) {
+                                //     sh 'scp $keyfile root@157.245.143.37:/root/ssh-key.pem'
+                                // }
+
+                                withCredentials([sshUserPrivateKey(credentialsId: "ec2-server-key", keyFileVariable: 'keyfile')]) {
+                                    sh 'scp -o StrictHostKeyChecking=no $keyfile root@157.245.143.37:/root/abc.pem'
+                                    // sh 'scp -i ${keyfile} do sth here'
                                 }
                             }
                 }
