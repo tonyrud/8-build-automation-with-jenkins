@@ -29,11 +29,29 @@ pipeline {
                                 //     sh 'scp $keyfile root@157.245.143.37:/root/ssh-key.pem'
                                 // }
 
-                                withCredentials([sshUserPrivateKey(credentialsId: "ec2-server-key", keyFileVariable: 'keyfile')]) {
-                                    sh 'scp -o StrictHostKeyChecking=no $keyfile root@157.245.143.37:/root/abc.pem'
-                                    // sh 'scp -i ${keyfile} do sth here'
-                                }
                             }
+                }
+            }
+        }
+
+        stage('execute ansible playbook') {
+            steps {
+                script {
+                    echo 'Executing ansible playbook'
+
+                    def remote = [:]
+                    remote.name = 'ansible-server'
+                    remote.host = '157.245.143.37'
+                    remote.allowAnyHosts = true
+
+                    withCredentials([sshUserPrivateKey(credentialsId: 'digital-ocean-ansible-server', keyFileVariable: 'keyfile', usernameVariable: 'user')]) {
+                        remote.user = user
+                        remote.identityFile = keyfile
+
+                        sshCommand remote: remote, command: 'ansible-playbook my-playbook.yaml'
+                    }
+
+
                 }
             }
         }
