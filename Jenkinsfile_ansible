@@ -13,8 +13,7 @@ pipeline {
         maven 'maven-3.9'
     }
     environment {
-        DOCKER_REPO_SERVER = '326347646211.dkr.ecr.us-east-2.amazonaws.com'
-        DOCKER_REPO = "${DOCKER_REPO_SERVER}/java-maven-app"
+        ANSIBLE_SERVER = '157.245.143.37'
     }
 
     stages {
@@ -23,10 +22,10 @@ pipeline {
                 script {
                             sshagent(['digital-ocean-ansible-server']) {
                                 // copy files from repo to ec2 instance
-                                sh 'scp -o StrictHostKeyChecking=no ansible/* root@157.245.143.37:/root'
+                                sh 'scp -o StrictHostKeyChecking=no ansible/* root@$ANSIBLE_SERVER:/root'
 
                                 // withCredentials([sshUserPrivateKey(credentialsId: 'ec2-server-key', keyFileVariable: 'keyfile', usernameVariable: 'user')]) {
-                                //     sh 'scp $keyfile root@157.245.143.37:/root/ssh-key.pem'
+                                //     sh 'scp $keyfile root@$ANSIBLE_SERVER:/root/ssh-key.pem'
                                 // }
 
                             }
@@ -41,13 +40,14 @@ pipeline {
 
                     def remote = [:]
                     remote.name = 'ansible-server'
-                    remote.host = '157.245.143.37'
+                    remote.host = ANSIBLE_SERVER
                     remote.allowAnyHosts = true
 
                     withCredentials([sshUserPrivateKey(credentialsId: 'digital-ocean-ansible-server', keyFileVariable: 'keyfile', usernameVariable: 'user')]) {
                         remote.user = user
                         remote.identityFile = keyfile
 
+                        // sshCommand remote: remote, command: 'prepare-ansible-server.sh'
                         sshCommand remote: remote, command: 'ansible-playbook -i inventory_aws_ec2.yaml my-playbook.yaml'
                     }
 
